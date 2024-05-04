@@ -73,9 +73,9 @@ async def test_set_health_check_key(arq_redis: ArqRedis, worker):
     assert sorted(await arq_redis.keys('*')) == [b'arq:test:health-check']
 
 
-async def test_handle_sig(caplog, arq_redis: ArqRedis):
+async def test_handle_sig(caplog, arq_redis: ArqRedis, stream: bool = False):
     caplog.set_level(logging.INFO)
-    worker = Worker([foobar], redis_pool=arq_redis)
+    worker = Worker([foobar], redis_pool=arq_redis, stream=stream)
     worker.main_task = MagicMock()
     worker.tasks = {0: MagicMock(done=MagicMock(return_value=True)), 1: MagicMock(done=MagicMock(return_value=False))}
 
@@ -90,11 +90,17 @@ async def test_handle_sig(caplog, arq_redis: ArqRedis):
     assert worker.tasks[0].cancel.call_count == 0
     assert worker.tasks[1].done.call_count == 1
     assert worker.tasks[1].cancel.call_count == 1
+    return True
 
 
-async def test_handle_no_sig(caplog):
+async def test_handle_sig_stream(caplog, arq_redis: ArqRedis):
+    result = await test_handle_sig(caplog, arq_redis, stream=True)
+    assert result
+
+
+async def test_handle_no_sig(caplog, stream: bool = False):
     caplog.set_level(logging.INFO)
-    worker = Worker([foobar], handle_signals=False)
+    worker = Worker([foobar], handle_signals=False, stream=stream)
     worker.main_task = MagicMock()
     worker.tasks = {0: MagicMock(done=MagicMock(return_value=True)), 1: MagicMock(done=MagicMock(return_value=False))}
 
@@ -109,6 +115,12 @@ async def test_handle_no_sig(caplog):
     assert worker.tasks[0].cancel.call_count == 0
     assert worker.tasks[1].done.call_count == 1
     assert worker.tasks[1].cancel.call_count == 1
+    return True
+
+
+async def test_handle_no_sig_stream(caplog):
+    result = await test_handle_no_sig(caplog, stream=True)
+    assert result
 
 
 async def test_worker_signal_completes_job_before_shutting_down(caplog, arq_redis: ArqRedis, worker):
